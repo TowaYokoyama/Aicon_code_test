@@ -55,6 +55,7 @@ func (s *Server) Run(ctx context.Context) error {
 		itemsGroup.GET("/:id", itemHandler.GetItem)        // GET /items/{id}
 		itemsGroup.DELETE("/:id", itemHandler.DeleteItem)  // DELETE /items/{id}
 		itemsGroup.GET("/summary", itemHandler.GetSummary) // GET /items/summary (bonus)
+		itemsGroup.PATCH("/:id", itemHandler.PatchItem)    // PATCH /items/{id} (added for update functionality)
 	}
 
 	return s.startWithGracefulShutdown(ctx, e)

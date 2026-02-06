@@ -51,6 +51,11 @@ func (m *MockItemRepository) GetSummaryByCategory(ctx context.Context) (map[stri
 	return args.Get(0).(map[string]int), args.Error(1)
 }
 
+func (m *MockItemRepository) Update(ctx context.Context, item *entity.Item) error {
+	args := m.Called(ctx, item)
+	return args.Error(0)
+}
+
 func TestNewItemUsecase(t *testing.T) {
 	mockRepo := new(MockItemRepository)
 	usecase := NewItemUsecase(mockRepo)
@@ -441,6 +446,112 @@ func TestItemUsecase_GetCategorySummary(t *testing.T) {
 			expectedCategories := []string{"時計", "バッグ", "ジュエリー", "靴", "その他"}
 			for _, category := range expectedCategories {
 				assert.Contains(t, summary.Categories, category)
+			}
+
+			mockRepo.AssertExpectations(t)
+		})
+	}
+}
+func TestItemUsecase_PatchItem(t *testing.T) {
+	ptrString := func(s string) *string {
+		return &s
+	}
+	prtInt := func(i int) *int {
+		return &i
+	}
+
+	tests := []struct {
+		name        string
+		id          int64
+		input       PatchItemInput
+		setupMock   func(*MockItemRepository)
+		expectError bool
+		expectedErr error
+	}{
+		{
+			name: "正常系: nameを更新",
+			id:   1,
+			input: PatchItemInput{
+				Name: ptrString("新しい名前"),
+			},
+			setupMock: func(mockRepo *MockItemRepository) {
+				item, _ := entity.NewItem("元の名前", "時計", "ROLEX", 1000, "2023-01-01")
+				item.ID = 1
+
+				mockRepo.On("FindByID", mock.Anything, int64(1)).Return(item, nil)
+				mockRepo.On("Update", mock.Anything, mock.AnythingOfType("*entity.Item")).Return(nil)
+			},
+			expectError: false,
+		},
+		{
+			name: "異常系: 無効なID",
+			id:   0,
+			input: PatchItemInput{
+				Name: ptrString("test"),
+			},
+			setupMock:   func(mockRepo *MockItemRepository) {},
+			expectError: true,
+			expectedErr: domainErrors.ErrInvalidInput,
+		},
+		{
+			name: "異常系: アイテムが存在しない",
+			id:   999,
+			input: PatchItemInput{
+				Name: ptrString("test"),
+			},
+			setupMock: func(mockRepo *MockItemRepository) {
+				mockRepo.On("FindByID", mock.Anything, int64(999)).Return((*entity.Item)(nil), domainErrors.ErrItemNotFound)
+			},
+			expectError: true,
+			expectedErr: domainErrors.ErrItemNotFound,
+		},
+		{
+			name: "異常系: マイナス価格",
+			id:   1,
+			input: PatchItemInput{
+				PurchasePrice: prtInt(-100),
+			},
+			setupMock: func(mockRepo *MockItemRepository) {
+				item, _ := entity.NewItem("時計", "時計", "ROLEX", 1000, "2023-01-01")
+				item.ID = 1
+
+				mockRepo.On("FindByID", mock.Anything, int64(1)).Return(item, nil)
+			},
+			expectError: true,
+			expectedErr: domainErrors.ErrInvalidInput,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockRepo := new(MockItemRepository)
+			tt.setupMock(mockRepo)
+			usecase := NewItemUsecase(mockRepo)
+			ctx := context.Background()
+
+			item, err := usecase.PatchItem(ctx, tt.id, tt.input)
+
+			if tt.expectError {
+				assert.Error(t, err)
+				if tt.expectedErr != nil {
+					assert.ErrorIs(t, err, tt.expectedErr)
+				}
+				assert.Nil(t, item)
+			} else {
+				assert.NoError(t, err)
+				assert.NotNil(t, item)
+
+				if tt.input.Name != nil {
+					assert.Equal(t, *tt.input.Name, item.Name)
+				}
+
+				if tt.input.Brand != nil {
+					assert.Equal(t, *tt.input.Brand, item.Brand)
+				}
+
+				if tt.input.PurchasePrice != nil {
+					assert.Equal(t, *tt.input.PurchasePrice, item.PurchasePrice)
+				}
 			}
 
 			mockRepo.AssertExpectations(t)
