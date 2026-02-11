@@ -479,7 +479,51 @@ func TestItemUsecase_PatchItem(t *testing.T) {
 				item.ID = 1
 
 				mockRepo.On("FindByID", mock.Anything, int64(1)).Return(item, nil)
-				mockRepo.On("Update", mock.Anything, mock.AnythingOfType("*entity.Item")).Return(nil)
+				mockRepo.On("Update", mock.Anything, mock.MatchedBy(func(i *entity.Item) bool {
+					return i.Name == "新しい名前"
+				})).Return(nil)
+			},
+			expectError: false,
+		},
+		{
+			name: "正常系: brandを更新",
+			id:   1,
+			input: PatchItemInput{
+				Brand: ptrString("CHANEL"),
+			},
+			setupMock: func(mockRepo *MockItemRepository) {
+				item, _ := entity.NewItem("元の名前", "時計", "ROLEX", 1000, "2023-01-01")
+				item.ID = 1
+
+				mockRepo.On("FindByID", mock.Anything, int64(1)).Return(item, nil)
+				mockRepo.On("Update", mock.Anything, mock.MatchedBy(func(i *entity.Item) bool {
+					return i.Brand == "CHANEL" &&
+						i.Name == "元の名前" &&
+						i.Category == "時計" &&
+						i.PurchaseDate == "2023-01-01" &&
+						i.PurchasePrice == 1000
+				})).Return(nil)
+			},
+			expectError: false,
+		},
+		{
+			name: "正常系: purchase_priceを更新",
+			id:   1,
+			input: PatchItemInput{
+				PurchasePrice: prtInt(2000),
+			},
+			setupMock: func(mockRepo *MockItemRepository) {
+				item, _ := entity.NewItem("元の名前", "時計", "ROLEX", 1000, "2023-01-01")
+				item.ID = 1
+
+				mockRepo.On("FindByID", mock.Anything, int64(1)).Return(item, nil)
+				mockRepo.On("Update", mock.Anything, mock.MatchedBy(func(i *entity.Item) bool {
+					return i.PurchasePrice == 2000 &&
+						i.Name == "元の名前" &&
+						i.Category == "時計" &&
+						i.PurchaseDate == "2023-01-01" &&
+						i.Brand == "ROLEX"
+				})).Return(nil)
 			},
 			expectError: false,
 		},
@@ -506,6 +550,19 @@ func TestItemUsecase_PatchItem(t *testing.T) {
 			expectedErr: domainErrors.ErrItemNotFound,
 		},
 		{
+			name:  "異常系: 空PATCHはエラー",
+			id:    1,
+			input: PatchItemInput{},
+			setupMock: func(mockRepo *MockItemRepository) {
+				item, _ := entity.NewItem("元の名前", "時計", "ROLEX", 1000, "2023-01-01")
+				item.ID = 1
+
+				mockRepo.On("FindByID", mock.Anything, int64(1)).Return(item, nil)
+			},
+			expectError: true,
+			expectedErr: domainErrors.ErrInvalidInput,
+		},
+		{
 			name: "異常系: マイナス価格",
 			id:   1,
 			input: PatchItemInput{
@@ -519,6 +576,34 @@ func TestItemUsecase_PatchItem(t *testing.T) {
 			},
 			expectError: true,
 			expectedErr: domainErrors.ErrInvalidInput,
+		},
+		{
+			name: "異常系: Updateエラー",
+			id:   1,
+			input: PatchItemInput{
+				Name: ptrString("新しい名前"),
+			},
+			setupMock: func(mockRepo *MockItemRepository) {
+				item, _ := entity.NewItem("元の名前", "時計", "ROLEX", 1000, "2023-01-01")
+				item.ID = 1
+
+				mockRepo.On("FindByID", mock.Anything, int64(1)).Return(item, nil)
+				mockRepo.On("Update", mock.Anything, mock.AnythingOfType("*entity.Item")).Return(domainErrors.ErrDatabaseError)
+			},
+			expectError: true,
+			expectedErr: domainErrors.ErrDatabaseError,
+		},
+		{
+			name: "異常系: FindByIDがDBエラー",
+			id:   1,
+			input: PatchItemInput{
+				Name: ptrString("test"),
+			},
+			setupMock: func(mockRepo *MockItemRepository) {
+				mockRepo.On("FindByID", mock.Anything, int64(1)).Return((*entity.Item)(nil), domainErrors.ErrDatabaseError)
+			},
+			expectError: true,
+			expectedErr: domainErrors.ErrDatabaseError,
 		},
 	}
 
