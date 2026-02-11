@@ -153,6 +153,10 @@ func (u *itemUsecase) PatchItem(ctx context.Context, id int64, input PatchItemIn
 		return nil, fmt.Errorf("failed to retrieve item: %w", err)
 	}
 
+	if input.Name == nil && input.Brand == nil && input.PurchasePrice == nil {
+		return nil, fmt.Errorf("%w: no fields to update", domainErrors.ErrInvalidInput)
+	}
+
 	//フィールド更新 nilをチェック
 	if input.Name != nil {
 		item.Name = *input.Name
